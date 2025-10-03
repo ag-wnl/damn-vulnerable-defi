@@ -40,6 +40,10 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
         return FIXED_FEE;
     }
 
+    // @audit - 
+    // 1. maxFlashLoan to be used to check if amount can be borrowed (not imp, txn reverts anyways if not enough balance)
+    // 2. anyone can call flashLoan and define a receiver - no caller check. ISSUE - receiver defined will have to pay fee amount: 1eth each time.
+    // ^ use above to drain funds in receiver contract
     function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data)
         external
         returns (bool)
@@ -63,6 +67,9 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
         return true;
     }
 
+    // @audit -
+    // 1. anyone can withdraw to a sent address, caller's funds deducted
+    // 2. manipulate _msgSender() using forwarder. all the moneh is ours loll
     function withdraw(uint256 amount, address payable receiver) external {
         // Reduce deposits
         deposits[_msgSender()] -= amount;
@@ -85,7 +92,9 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
 
     function _msgSender() internal view override returns (address) {
         if (msg.sender == trustedForwarder && msg.data.length >= 20) {
-            return address(bytes20(msg.data[msg.data.length - 20:]));
+            // @audit - reads last 20 bytes as address
+            // ^ modify calldata to append deployer address to the end. so all pool related checks show we are deployer
+            return address(bytes20(msg.data[msg.data.length - 20:])); 
         } else {
             return super._msgSender();
         }

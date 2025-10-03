@@ -60,7 +60,7 @@ contract BasicForwarder is EIP712 {
         uint256 gasLeft;
         uint256 value = request.value; // in wei
         address target = request.target;
-        bytes memory payload = abi.encodePacked(request.data, request.from);
+        bytes memory payload = abi.encodePacked(request.data, request.from); // appends from address to calldata
         uint256 forwardGas = request.gas;
         assembly {
             success := call(forwardGas, target, value, add(payload, 0x20), mload(payload), 0, 0) // don't copy returndata
