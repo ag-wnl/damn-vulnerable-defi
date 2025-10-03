@@ -17,6 +17,7 @@ contract FlashLoanReceiver is IERC3156FlashBorrower {
         external
         returns (bytes32)
     {
+        // @audit - ofc caller is flash loan contract, caus attacker will call it with receiver info
         assembly {
             // gas savings
             if iszero(eq(sload(pool.slot), caller())) {

